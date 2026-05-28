@@ -4,10 +4,8 @@ from urllib.parse import urljoin
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import threading
 
-# ==================================================================
-# DATABASE MASTER FOLDER WORDPRESS (SEMUA SUBFOLDER SAMPE DALEM)
-# ==================================================================
 ALL_WP_FOLDERS = [
     "wp-admin/",
     "wp-admin/css/",
@@ -642,254 +640,489 @@ ALL_WP_FOLDERS = [
     "wp-includes/widgets/",
 ]
 
-HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
-TIMEOUT = 10
-MAX_WORKERS_CHECK = 20   # buat pengecekan folder paralel
-MAX_WORKERS_RECURSIVE = 5 # buat recursive scan per top-level folder (optional)
+HEADERS = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
 
-# ==================================================================
-# FUNGSI DETEKSI CEPAT APAKAH SITUS WORDPRESS
-# ==================================================================
+TIMEOUT = 10
+
+MAX_WORKERS_CHECK = 30
+MAX_WORKERS_RECURSIVE = 20
+MAX_WORKERS_BACKDOOR = 20
+
+MAX_DEPTH = 3
+
+PRINT_LOCK = threading.Lock()
+
+
+def safe_print(*args, **kwargs):
+    with PRINT_LOCK:
+        print(*args, **kwargs)
+
+
+def normalize_base_url(url):
+    url = url.strip()
+
+    if not url.startswith(("http://", "https://")):
+        url = "https://" + url
+
+    if not url.endswith("/"):
+        url += "/"
+
+    return url
+
+
+def make_output_file(base_url):
+    return f"backdoor_{base_url.replace('https://', '').replace('http://', '').replace('/', '_')}.txt"
+
+
 def is_wordpress_site(base_url):
-    """Cek apakah situs menggunakan WordPress (cepat dengan HEAD/GET beberapa file penting)."""
     test_paths = [
         "wp-login.php",
         "wp-content/",
         "wp-includes/",
-        "wp-admin/"
+        "wp-admin/",
     ]
+
     for path in test_paths:
         url = urljoin(base_url, path)
+
         try:
-            resp = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=False)
+            resp = requests.head(
+                url,
+                headers=HEADERS,
+                timeout=5,
+                allow_redirects=False,
+            )
+
             if resp.status_code == 200:
                 return True
-            # Jika HEAD tidak support, coba GET dengan stream
-            resp = requests.get(url, headers=HEADERS, timeout=5, stream=True)
+
+            resp = requests.get(
+                url,
+                headers=HEADERS,
+                timeout=5,
+                stream=True,
+                allow_redirects=False,
+            )
+
             if resp.status_code == 200:
                 return True
-        except:
+
+        except Exception:
             continue
+
     return False
 
-# ==================================================================
-# FUNGSI SCANNING INDEX OF (PARALEL)
-# ==================================================================
-def is_index_of(url):
-    """Cek apakah suatu URL adalah halaman Index Of (return True/False)."""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False)
-        if resp.status_code != 200:
-            return False
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        title = soup.find('title')
-        return title and "Index of" in title.text
-    except:
-        return False
 
-def get_all_open_folders_parallel(base_url, folder_list):
-    """Cek banyak folder secara paralel, return list URL yang index of."""
-    full_urls = [urljoin(base_url, folder) for folder in folder_list]
+def parse_index_of_page(dir_url):
+    result = {
+        "url": dir_url,
+        "is_index": False,
+        "subdirs": set(),
+        "php_files": set(),
+    }
+
+    try:
+        resp = requests.get(
+            dir_url,
+            headers=HEADERS,
+            timeout=TIMEOUT,
+            allow_redirects=False,
+        )
+
+        if resp.status_code != 200:
+            return result
+
+        soup = BeautifulSoup(resp.text, "html.parser")
+
+        title = soup.find("title")
+
+        if not (title and "Index of" in title.text):
+            return result
+
+        result["is_index"] = True
+
+        for link in soup.find_all("a"):
+            href = link.get("href")
+
+            if not href:
+                continue
+
+            href = href.strip()
+
+            if href in ("../", "/", "./"):
+                continue
+
+            if href.endswith(".php"):
+                result["php_files"].add(urljoin(dir_url, href))
+
+            elif href.endswith("/"):
+                result["subdirs"].add(urljoin(dir_url, href))
+
+    except Exception:
+        pass
+
+    return result
+
+def scan_all_wp_folders_once(base_url):
+    full_urls = [urljoin(base_url, folder) for folder in ALL_WP_FOLDERS]
+
     open_folders = []
+    folder_cache = {}
+    all_php = set()
+
+    safe_print(f"\n🔍 Cek Index Of dari {len(full_urls)} folder ALL_WP_FOLDERS...")
+
     with ThreadPoolExecutor(max_workers=MAX_WORKERS_CHECK) as executor:
-        future_to_url = {executor.submit(is_index_of, url): url for url in full_urls}
+        future_to_url = {
+            executor.submit(parse_index_of_page, url): url
+            for url in full_urls
+        }
+
         for future in as_completed(future_to_url):
             url = future_to_url[future]
-            if future.result():
-                print(f"  ✅ TERBUKA: {url}")
+
+            try:
+                parsed = future.result()
+            except Exception:
+                continue
+
+            folder_cache[url] = parsed
+
+            if parsed["is_index"]:
+                safe_print(
+                    f"  ✅ TERBUKA: {url} | "
+                    f"php +{len(parsed['php_files'])} | "
+                    f"subdir +{len(parsed['subdirs'])}"
+                )
+
                 open_folders.append(url)
-    return open_folders
+                all_php.update(parsed["php_files"])
 
-# ==================================================================
-# SCANNING REKURSIF (dengan caching visited)
-# ==================================================================
-def get_directory_links(url):
-    """Ambil daftar subdirektori dari satu halaman Index Of."""
-    try:
-        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
-        if resp.status_code != 200:
-            return []
-        soup = BeautifulSoup(resp.text, 'html.parser')
-        title = soup.find('title')
-        if not (title and "Index of" in title.text):
-            return []
-        links = []
-        for row in soup.find_all('tr'):
-            link_tag = row.find('a')
-            if link_tag and link_tag.get('href'):
-                href = link_tag['href']
-                if href.endswith('/') and href not in ('../', '/'):
-                    links.append(urljoin(url, href))
-        return links
-    except:
-        return []
+            else:
+                index_php = urljoin(url, "index.php")
+                all_php.add(index_php)
 
-def recursive_scan(folder_url, max_depth=3, visited=None, current_depth=0):
-    if visited is None:
-        visited = set()
-    if current_depth >= max_depth or folder_url in visited:
-        return []
+    return open_folders, folder_cache, all_php
+
+def filter_top_level_folders(open_folders):
+    open_set = set(open_folders)
+    top_level = []
+
+    for folder in sorted(open_folders, key=len):
+        parent = folder.rstrip("/")
+        last = parent.rfind("/")
+
+        if last != -1:
+            parent = parent[:last + 1]
+
+            if parent in open_set:
+                continue
+
+        top_level.append(folder)
+
+    return top_level
+
+def recursive_collect(folder_url, folder_cache, visited, all_dirs, all_php, current_depth=0):
+    if current_depth >= MAX_DEPTH:
+        return
+
+    if folder_url in visited:
+        return
+
     visited.add(folder_url)
-    print(f"{'  ' * current_depth}📂 Scanning: {folder_url}")
-    subdirs = get_directory_links(folder_url)
-    all_sub = []
-    for sub in subdirs:
-        all_sub.append(sub)
-        all_sub.extend(recursive_scan(sub, max_depth, visited, current_depth+1))
-    return all_sub
+    all_dirs.add(folder_url)
 
-# ==================================================================
-# DETEKSI BACKDOOR (tetap pakai threading untuk file .php)
-# ==================================================================
+    indent = "  " * current_depth
+    safe_print(f"{indent}📂 Scanning: {folder_url}")
+
+    if folder_url in folder_cache:
+        parsed = folder_cache[folder_url]
+    else:
+        parsed = parse_index_of_page(folder_url)
+        folder_cache[folder_url] = parsed
+
+    if not parsed["is_index"]:
+        all_php.add(urljoin(folder_url, "index.php"))
+        return
+
+    all_php.update(parsed["php_files"])
+
+    for subdir in parsed["subdirs"]:
+        recursive_collect(
+            subdir,
+            folder_cache,
+            visited,
+            all_dirs,
+            all_php,
+            current_depth + 1,
+        )
+
+def recursive_collect_all(top_level_folders, folder_cache, all_php):
+    visited_global = set()
+    all_dirs_global = set()
+    lock = threading.Lock()
+
+    def worker(folder):
+        local_visited = set()
+        local_dirs = set()
+        local_php = set()
+
+        recursive_collect(
+            folder,
+            folder_cache,
+            local_visited,
+            local_dirs,
+            local_php,
+            current_depth=0,
+        )
+
+        with lock:
+            visited_global.update(local_visited)
+            all_dirs_global.update(local_dirs)
+            all_php.update(local_php)
+
+    safe_print(f"\n🎯 Folder top-level ({len(top_level_folders)}) akan discan rekursif:")
+
+    for folder in top_level_folders:
+        safe_print(f"   {folder}")
+
+    safe_print("\n🚀 Recursive scan + scrape .php langsung...")
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_RECURSIVE) as executor:
+        futures = [
+            executor.submit(worker, folder)
+            for folder in top_level_folders
+        ]
+
+        for future in as_completed(futures):
+            try:
+                future.result()
+            except Exception:
+                pass
+
+    return all_dirs_global, all_php
+
+
 def is_suspicious_backdoor(html, status_code):
     if not html:
         return False, {}
-    soup = BeautifulSoup(html, 'html.parser')
-    forms = soup.find_all('form', method=lambda x: x and x.lower() == 'post')
+
+    soup = BeautifulSoup(html, "html.parser")
+    html_lower = html.lower()
+
+    forms = soup.find_all(
+        "form",
+        method=lambda x: x and x.lower() == "post",
+    )
+
     if not forms:
         return False, {}
-    has_pwd = any(form.find_all('input', {'type': 'password'}) for form in forms)
+
+    has_pwd = any(
+        form.find_all("input", {"type": "password"})
+        for form in forms
+    )
+
     if not has_pwd:
         return False, {}
-    title = soup.find('title')
+
+    title = soup.find("title")
     title_text = title.get_text(strip=True).lower() if title else ""
-    keywords_title = ['pheditor', 'file manager', 'webshell', 'backdoor', 'wso', 'c99', 'b374k', 'shell']
-    keywords_body = ['过安全狗', '云锁', 'd盾', 'Pheditor', 'c99shell', '微型后门', '一句话']
-    fake_error = status_code == 200 and ('internal server error' in title_text or 'forbidden' in title_text)
-    if any(k in title_text for k in keywords_title) or any(k in html.lower() for k in keywords_body) or fake_error:
-        return True, {'title': title_text, 'fake_error': fake_error}
-    return False, {}
+
+    keywords_title = [
+        "pheditor",
+        "file manager",
+        "webshell",
+        "backdoor",
+        "wso",
+        "c99",
+        "b374k",
+        "shell",
+    ]
+
+    keywords_body = [
+        "过安全狗",
+        "云锁",
+        "d盾",
+        "pheditor",
+        "c99shell",
+        "微型后门",
+        "一句话",
+    ]
+
+    fake_error = (
+        status_code == 200
+        and (
+            "internal server error" in title_text
+            or "forbidden" in title_text
+        )
+    )
+
+    title_hit = any(k in title_text for k in keywords_title)
+    body_hit = any(k in html_lower for k in keywords_body)
+
+    if title_hit or body_hit or fake_error:
+        return True, {
+            "level": "HIGH",
+            "title": title_text,
+            "fake_error": fake_error,
+            "reason": "keyword_or_fake_error_with_post_password",
+        }
+
+    return True, {
+        "level": "MEDIUM",
+        "title": title_text,
+        "fake_error": fake_error,
+        "reason": "generic_post_password_form",
+    }
+
 
 def check_php_file(url):
     try:
-        resp = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=False)
+        resp = requests.get(
+            url,
+            headers=HEADERS,
+            timeout=10,
+            allow_redirects=False,
+        )
+
         if resp.status_code in (200, 403, 404, 500):
-            is_bd, reason = is_suspicious_backdoor(resp.text, resp.status_code)
+            is_bd, reason = is_suspicious_backdoor(
+                resp.text,
+                resp.status_code,
+            )
+
             if is_bd:
                 return url, True, reason
-    except:
+
+    except Exception:
         pass
+
     return url, False, {}
 
-def get_php_files_from_dir(dir_url):
-    php_files = set()
-    try:
-        resp = requests.get(dir_url, headers=HEADERS, timeout=10)
-        if resp.status_code == 200:
-            soup = BeautifulSoup(resp.text, 'html.parser')
-            for link in soup.find_all('a'):
-                href = link.get('href')
-                if href and href.endswith('.php'):
-                    full = urljoin(dir_url, href)
-                    php_files.add(full)
-    except:
-        pass
-    php_files.add(urljoin(dir_url, 'index.php'))
-    return php_files
 
-def scan_backdoors_parallel(folder_urls, output_file):
-    print(f"\n🔍 Mengumpulkan file .php dari {len(folder_urls)} direktori...")
-    all_php = set()
-    for folder in folder_urls:
-        all_php.update(get_php_files_from_dir(folder))
-    print(f"📄 Total file .php unik: {len(all_php)}")
-    print("🚀 Deteksi backdoor (parallel)...")
+def scan_backdoors_parallel_php_urls(php_urls, output_file):
+    php_urls = sorted(set(php_urls))
+
+    safe_print(f"\n📄 Total file .php unik: {len(php_urls)}")
+    safe_print("🚀 Deteksi backdoor parallel...")
+
     suspicious = []
-    with ThreadPoolExecutor(max_workers=10) as ex:
-        futures = [ex.submit(check_php_file, url) for url in all_php]
-        for fut in as_completed(futures):
-            url, is_bd, reason = fut.result()
+
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_BACKDOOR) as executor:
+        futures = [
+            executor.submit(check_php_file, url)
+            for url in php_urls
+        ]
+
+        done = 0
+        total = len(futures)
+
+        for future in as_completed(futures):
+            done += 1
+
+            try:
+                url, is_bd, reason = future.result()
+            except Exception:
+                continue
+
             if is_bd:
                 suspicious.append((url, reason))
-                print(f"[!] 🚨 BACKDOOR: {url}")
-    with open(output_file, 'w', encoding='utf-8') as f:
-        f.write("REPORT BACKDOOR\n")
+                level = reason.get("level", "UNKNOWN")
+                safe_print(f"[!] 🚨 BACKDOOR [{level}]: {url}")
+
+            if done % 100 == 0:
+                safe_print(f"   ...checked {done}/{total} php")
+
+    with open(output_file, "w", encoding="utf-8") as file:
+        file.write("REPORT BACKDOOR\n")
+        file.write("=" * 60 + "\n\n")
+
         for url, reason in suspicious:
-            f.write(f"{url}\n    {reason}\n")
-    print(f"✅ Ditemukan {len(suspicious)} backdoor. Laporan: {output_file}")
+            file.write(f"{url}\n")
+            file.write(f"    {reason}\n\n")
 
-# ==================================================================
-# PROSES SATU SITUS
-# ==================================================================
+    safe_print(f"✅ Ditemukan {len(suspicious)} kandidat backdoor. Laporan: {output_file}")
+
+    return suspicious
+
 def process_site(base_url):
-    print(f"\n{'='*60}\n🌐 Memproses: {base_url}\n{'='*60}")
-    start_time = time.time()
-    
-    # 1. Deteksi WordPress cepat
-    if not is_wordpress_site(base_url):
-        print("❌ BUKAN WORDPRESS atau tidak dapat diakses. Skip.")
-        return
-    
-    print("✅ Terdeteksi sebagai WordPress. Melanjutkan scan folder...")
-    
-    # 2. Scan semua folder di ALL_WP_FOLDERS secara paralel
-    open_folders = get_all_open_folders_parallel(base_url, ALL_WP_FOLDERS)
-    
-    if not open_folders:
-        print("⚠️ Tidak ada folder Index Of. Coba fallback ke file index.php...")
-        fallback = [urljoin(base_url, p) for p in [
-            "wp-admin/index.php", "wp-content/index.php", "wp-includes/index.php",
-            "wp-content/plugins/index.php", "wp-includes/js/index.php"
-        ]]
-        scan_backdoors_parallel(fallback, f"backdoor_{base_url.replace('https://','').replace('/','_')}.txt")
-        return
-    
-    # 3. Filter top-level (parent tidak terbuka)
-    open_set = set(open_folders)
-    top_level = []
-    for folder in sorted(open_folders, key=len):
-        parent = folder.rstrip('/')
-        last = parent.rfind('/')
-        if last != -1:
-            parent = parent[:last+1]
-            if parent in open_set:
-                continue
-        top_level.append(folder)
-    
-    print(f"\n🎯 Folder top-level ({len(top_level)}) akan discan rekursif:")
-    for f in top_level:
-        print(f"   {f}")
-    
-    # 4. Scan rekursif (bisa sequential karena sudah terfilter, cepat)
-    all_dirs = []
-    for folder in top_level:
-        print(f"\n📁 Rekursif: {folder}")
-        subdirs = recursive_scan(folder, max_depth=3)
-        all_dirs.append(folder)
-        all_dirs.extend(subdirs)
-    
-    all_dirs = list(dict.fromkeys(all_dirs))
-    print(f"\n✨ Total direktori unik: {len(all_dirs)}")
-    
-    # 5. Scan backdoor di semua direktori
-    output_file = f"backdoor_{base_url.replace('https://','').replace('http://','').replace('/','_')}.txt"
-    scan_backdoors_parallel(all_dirs, output_file)
-    
-    elapsed = time.time() - start_time
-    print(f"⏱️  Waktu total untuk {base_url}: {elapsed:.2f} detik")
+    base_url = normalize_base_url(base_url)
 
-# ==================================================================
-# MAIN: BATCH DARI FILE ATAU SINGLE URL
-# ==================================================================
+    safe_print(f"\n{'=' * 60}")
+    safe_print(f"🌐 Memproses: {base_url}")
+    safe_print(f"{'=' * 60}")
+
+    start_time = time.time()
+
+    if not is_wordpress_site(base_url):
+        safe_print("❌ BUKAN WORDPRESS atau tidak dapat diakses. Skip.")
+        return
+
+    safe_print("✅ Terdeteksi sebagai WordPress. Melanjutkan scan folder...")
+
+    open_folders, folder_cache, all_php = scan_all_wp_folders_once(base_url)
+
+    if not open_folders:
+        safe_print("⚠️ Tidak ada folder Index Of.")
+        safe_print("✅ Tetap scan index.php dari folder yang bukan Index Of...")
+
+        output_file = make_output_file(base_url)
+        scan_backdoors_parallel_php_urls(all_php, output_file)
+
+        elapsed = time.time() - start_time
+        safe_print(f"⏱️  Waktu total untuk {base_url}: {elapsed:.2f} detik")
+        return
+
+    top_level = filter_top_level_folders(open_folders)
+
+    all_dirs, all_php = recursive_collect_all(
+        top_level,
+        folder_cache,
+        all_php,
+    )
+
+    all_dirs = list(dict.fromkeys(all_dirs))
+    all_php = set(all_php)
+
+    safe_print("\n📊 Ringkasan discovery:")
+    safe_print(f"   Folder Index Of awal dari ALL_WP_FOLDERS : {len(open_folders)}")
+    safe_print(f"   Folder top-level recursive              : {len(top_level)}")
+    safe_print(f"   Total direktori unik recursive          : {len(all_dirs)}")
+    safe_print(f"   Total file .php unik                    : {len(all_php)}")
+
+    output_file = make_output_file(base_url)
+    scan_backdoors_parallel_php_urls(all_php, output_file)
+
+    elapsed = time.time() - start_time
+    safe_print(f"⏱️  Waktu total untuk {base_url}: {elapsed:.2f} detik")
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: python main.py <url_or_file.txt>")
         print("Contoh: python main.py https://example.com")
         print("        python main.py daftar_situs.txt")
         sys.exit(1)
-    
-    arg = sys.argv[1]
-    if arg.endswith('.txt'):
-        with open(arg, 'r') as f:
-            urls = [line.strip() for line in f if line.strip()]
+
+    arg = sys.argv[1].strip()
+
+    if arg.endswith(".txt"):
+        with open(arg, "r", encoding="utf-8", errors="ignore") as file:
+            urls = [
+                line.strip()
+                for line in file
+                if line.strip()
+            ]
+
         for url in urls:
-            if not url.startswith(('http://','https://')):
-                url = 'https://' + url
             process_site(url)
+
     else:
-        if not arg.startswith(('http://','https://')):
-            arg = 'https://' + arg
         process_site(arg)
+
 
 if __name__ == "__main__":
     main()
