@@ -1,0 +1,895 @@
+import requests
+from bs4 import BeautifulSoup
+from urllib.parse import urljoin
+import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
+import time
+
+# ==================================================================
+# DATABASE MASTER FOLDER WORDPRESS (SEMUA SUBFOLDER SAMPE DALEM)
+# ==================================================================
+ALL_WP_FOLDERS = [
+    "wp-admin/",
+    "wp-admin/css/",
+    "wp-admin/css/colors/",
+    "wp-admin/css/colors/blue/",
+    "wp-admin/css/colors/coffee/",
+    "wp-admin/css/colors/ectoplasm/",
+    "wp-admin/css/colors/light/",
+    "wp-admin/css/colors/midnight/",
+    "wp-admin/css/colors/modern/",
+    "wp-admin/css/colors/ocean/",
+    "wp-admin/css/colors/sunrise/",
+    "wp-admin/images/",
+    "wp-admin/includes/",
+    "wp-admin/js/",
+    "wp-admin/js/widgets/",
+    "wp-admin/maint/",
+    "wp-admin/network/",
+    "wp-admin/user/",
+    "wp-content/",
+    "wp-content/plugins/",
+    "wp-content/themes/",
+    "wp-content/themes/twentyeleven/",
+    "wp-content/themes/twentyeleven/colors/",
+    "wp-content/themes/twentyeleven/images/",
+    "wp-content/themes/twentyeleven/images/headers/",
+    "wp-content/themes/twentyeleven/images/patterns/",
+    "wp-content/themes/twentyeleven/inc/",
+    "wp-content/themes/twentyeleven/inc/images/",
+    "wp-content/themes/twentyeleven/js/",
+    "wp-content/themes/twentyeleven/languages/",
+    "wp-content/themes/twentyfifteen/",
+    "wp-content/themes/twentyfifteen/assets/",
+    "wp-content/themes/twentyfifteen/assets/fonts/",
+    "wp-content/themes/twentyfifteen/assets/fonts/inconsolata/",
+    "wp-content/themes/twentyfifteen/assets/fonts/noto-sans/",
+    "wp-content/themes/twentyfifteen/assets/fonts/noto-serif/",
+    "wp-content/themes/twentyfifteen/css/",
+    "wp-content/themes/twentyfifteen/genericons/",
+    "wp-content/themes/twentyfifteen/inc/",
+    "wp-content/themes/twentyfifteen/js/",
+    "wp-content/themes/twentyfourteen/",
+    "wp-content/themes/twentyfourteen/css/",
+    "wp-content/themes/twentyfourteen/fonts/",
+    "wp-content/themes/twentyfourteen/fonts/lato/",
+    "wp-content/themes/twentyfourteen/genericons/",
+    "wp-content/themes/twentyfourteen/genericons/font/",
+    "wp-content/themes/twentyfourteen/images/",
+    "wp-content/themes/twentyfourteen/inc/",
+    "wp-content/themes/twentyfourteen/js/",
+    "wp-content/themes/twentyfourteen/page-templates/",
+    "wp-content/themes/twentynineteen/",
+    "wp-content/themes/twentynineteen/classes/",
+    "wp-content/themes/twentynineteen/fonts/",
+    "wp-content/themes/twentynineteen/images/",
+    "wp-content/themes/twentynineteen/inc/",
+    "wp-content/themes/twentynineteen/js/",
+    "wp-content/themes/twentynineteen/sass/",
+    "wp-content/themes/twentynineteen/sass/blocks/",
+    "wp-content/themes/twentynineteen/sass/elements/",
+    "wp-content/themes/twentynineteen/sass/forms/",
+    "wp-content/themes/twentynineteen/sass/layout/",
+    "wp-content/themes/twentynineteen/sass/media/",
+    "wp-content/themes/twentynineteen/sass/mixins/",
+    "wp-content/themes/twentynineteen/sass/modules/",
+    "wp-content/themes/twentynineteen/sass/navigation/",
+    "wp-content/themes/twentynineteen/sass/site/",
+    "wp-content/themes/twentynineteen/sass/site/footer/",
+    "wp-content/themes/twentynineteen/sass/site/header/",
+    "wp-content/themes/twentynineteen/sass/site/primary/",
+    "wp-content/themes/twentynineteen/sass/site/secondary/",
+    "wp-content/themes/twentynineteen/sass/typography/",
+    "wp-content/themes/twentynineteen/sass/variables-site/",
+    "wp-content/themes/twentynineteen/template-parts/",
+    "wp-content/themes/twentynineteen/template-parts/content/",
+    "wp-content/themes/twentynineteen/template-parts/footer/",
+    "wp-content/themes/twentynineteen/template-parts/header/",
+    "wp-content/themes/twentynineteen/template-parts/post/",
+    "wp-content/themes/twentyseventeen/",
+    "wp-content/themes/twentyseventeen/assets/",
+    "wp-content/themes/twentyseventeen/assets/css/",
+    "wp-content/themes/twentyseventeen/assets/fonts/",
+    "wp-content/themes/twentyseventeen/assets/fonts/libre-franklin/",
+    "wp-content/themes/twentyseventeen/assets/images/",
+    "wp-content/themes/twentyseventeen/assets/js/",
+    "wp-content/themes/twentyseventeen/inc/",
+    "wp-content/themes/twentyseventeen/template-parts/",
+    "wp-content/themes/twentyseventeen/template-parts/footer/",
+    "wp-content/themes/twentyseventeen/template-parts/header/",
+    "wp-content/themes/twentyseventeen/template-parts/navigation/",
+    "wp-content/themes/twentyseventeen/template-parts/page/",
+    "wp-content/themes/twentyseventeen/template-parts/post/",
+    "wp-content/themes/twentysixteen/",
+    "wp-content/themes/twentysixteen/css/",
+    "wp-content/themes/twentysixteen/fonts/",
+    "wp-content/themes/twentysixteen/fonts/inconsolata/",
+    "wp-content/themes/twentysixteen/fonts/merriweather/",
+    "wp-content/themes/twentysixteen/fonts/montserrat/",
+    "wp-content/themes/twentysixteen/genericons/",
+    "wp-content/themes/twentysixteen/inc/",
+    "wp-content/themes/twentysixteen/js/",
+    "wp-content/themes/twentysixteen/template-parts/",
+    "wp-content/themes/twentyten/",
+    "wp-content/themes/twentyten/images/",
+    "wp-content/themes/twentyten/images/headers/",
+    "wp-content/themes/twentyten/images/patterns/",
+    "wp-content/themes/twentyten/languages/",
+    "wp-content/themes/twentythirteen/",
+    "wp-content/themes/twentythirteen/css/",
+    "wp-content/themes/twentythirteen/fonts/",
+    "wp-content/themes/twentythirteen/fonts/bitter/",
+    "wp-content/themes/twentythirteen/fonts/source-sans-pro/",
+    "wp-content/themes/twentythirteen/genericons/",
+    "wp-content/themes/twentythirteen/genericons/font/",
+    "wp-content/themes/twentythirteen/images/",
+    "wp-content/themes/twentythirteen/images/block-patterns/",
+    "wp-content/themes/twentythirteen/images/headers/",
+    "wp-content/themes/twentythirteen/inc/",
+    "wp-content/themes/twentythirteen/js/",
+    "wp-content/themes/twentytwelve/",
+    "wp-content/themes/twentytwelve/css/",
+    "wp-content/themes/twentytwelve/fonts/",
+    "wp-content/themes/twentytwelve/fonts/open-sans/",
+    "wp-content/themes/twentytwelve/images/",
+    "wp-content/themes/twentytwelve/inc/",
+    "wp-content/themes/twentytwelve/js/",
+    "wp-content/themes/twentytwelve/page-templates/",
+    "wp-content/themes/twentytwenty/",
+    "wp-content/themes/twentytwenty/assets/",
+    "wp-content/themes/twentytwenty/assets/css/",
+    "wp-content/themes/twentytwenty/assets/fonts/",
+    "wp-content/themes/twentytwenty/assets/fonts/inter/",
+    "wp-content/themes/twentytwenty/assets/images/",
+    "wp-content/themes/twentytwenty/assets/js/",
+    "wp-content/themes/twentytwenty/classes/",
+    "wp-content/themes/twentytwenty/inc/",
+    "wp-content/themes/twentytwenty/template-parts/",
+    "wp-content/themes/twentytwenty/templates/",
+    "wp-content/themes/twentytwentyfive/",
+    "wp-content/themes/twentytwentyfive/assets/",
+    "wp-content/themes/twentytwentyfive/assets/css/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/beiruti/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/fira-code/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/fira-sans/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/literata/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/manrope/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/platypi/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/roboto-slab/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/vollkorn/",
+    "wp-content/themes/twentytwentyfive/assets/fonts/ysabeau-office/",
+    "wp-content/themes/twentytwentyfive/assets/images/",
+    "wp-content/themes/twentytwentyfive/parts/",
+    "wp-content/themes/twentytwentyfive/patterns/",
+    "wp-content/themes/twentytwentyfive/styles/",
+    "wp-content/themes/twentytwentyfive/styles/blocks/",
+    "wp-content/themes/twentytwentyfive/styles/colors/",
+    "wp-content/themes/twentytwentyfive/styles/sections/",
+    "wp-content/themes/twentytwentyfive/styles/typography/",
+    "wp-content/themes/twentytwentyfive/templates/",
+    "wp-content/themes/twentytwentyfour/",
+    "wp-content/themes/twentytwentyfour/assets/",
+    "wp-content/themes/twentytwentyfour/assets/css/",
+    "wp-content/themes/twentytwentyfour/assets/fonts/",
+    "wp-content/themes/twentytwentyfour/assets/fonts/cardo/",
+    "wp-content/themes/twentytwentyfour/assets/fonts/instrument-sans/",
+    "wp-content/themes/twentytwentyfour/assets/fonts/inter/",
+    "wp-content/themes/twentytwentyfour/assets/fonts/jost/",
+    "wp-content/themes/twentytwentyfour/assets/images/",
+    "wp-content/themes/twentytwentyfour/parts/",
+    "wp-content/themes/twentytwentyfour/patterns/",
+    "wp-content/themes/twentytwentyfour/styles/",
+    "wp-content/themes/twentytwentyfour/templates/",
+    "wp-content/themes/twentytwentyone/",
+    "wp-content/themes/twentytwentyone/assets/",
+    "wp-content/themes/twentytwentyone/assets/css/",
+    "wp-content/themes/twentytwentyone/assets/images/",
+    "wp-content/themes/twentytwentyone/assets/js/",
+    "wp-content/themes/twentytwentyone/assets/sass/",
+    "wp-content/themes/twentytwentyone/assets/sass/01-settings/",
+    "wp-content/themes/twentytwentyone/assets/sass/02-tools/",
+    "wp-content/themes/twentytwentyone/assets/sass/03-generic/",
+    "wp-content/themes/twentytwentyone/assets/sass/04-elements/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/audio/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/button/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/code/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/columns/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/cover/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/file/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/gallery/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/group/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/heading/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/html/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/image/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/latest-comments/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/latest-posts/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/legacy/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/list/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/media-text/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/navigation/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/paragraph/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/preformatted/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/pullquote/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/query-loop/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/quote/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/rss/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/search/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/separator/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/social-icons/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/table/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/tag-clould/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/utilities/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/verse/",
+    "wp-content/themes/twentytwentyone/assets/sass/05-blocks/video/",
+    "wp-content/themes/twentytwentyone/assets/sass/06-components/",
+    "wp-content/themes/twentytwentyone/assets/sass/07-utilities/",
+    "wp-content/themes/twentytwentyone/classes/",
+    "wp-content/themes/twentytwentyone/inc/",
+    "wp-content/themes/twentytwentyone/template-parts/",
+    "wp-content/themes/twentytwentyone/template-parts/content/",
+    "wp-content/themes/twentytwentyone/template-parts/excerpt/",
+    "wp-content/themes/twentytwentyone/template-parts/footer/",
+    "wp-content/themes/twentytwentyone/template-parts/header/",
+    "wp-content/themes/twentytwentyone/template-parts/post/",
+    "wp-content/themes/twentytwentythree/",
+    "wp-content/themes/twentytwentythree/assets/",
+    "wp-content/themes/twentytwentythree/assets/fonts/",
+    "wp-content/themes/twentytwentythree/assets/fonts/dm-sans/",
+    "wp-content/themes/twentytwentythree/assets/fonts/ibm-plex-mono/",
+    "wp-content/themes/twentytwentythree/assets/fonts/inter/",
+    "wp-content/themes/twentytwentythree/assets/fonts/source-serif-pro/",
+    "wp-content/themes/twentytwentythree/parts/",
+    "wp-content/themes/twentytwentythree/patterns/",
+    "wp-content/themes/twentytwentythree/styles/",
+    "wp-content/themes/twentytwentythree/templates/",
+    "wp-content/themes/twentytwentytwo/",
+    "wp-content/themes/twentytwentytwo/assets/",
+    "wp-content/themes/twentytwentytwo/assets/fonts/",
+    "wp-content/themes/twentytwentytwo/assets/fonts/dm-sans/",
+    "wp-content/themes/twentytwentytwo/assets/fonts/ibm-plex/",
+    "wp-content/themes/twentytwentytwo/assets/fonts/inter/",
+    "wp-content/themes/twentytwentytwo/assets/fonts/source-serif-pro/",
+    "wp-content/themes/twentytwentytwo/assets/images/",
+    "wp-content/themes/twentytwentytwo/assets/videos/",
+    "wp-content/themes/twentytwentytwo/inc/",
+    "wp-content/themes/twentytwentytwo/inc/patterns/",
+    "wp-content/themes/twentytwentytwo/parts/",
+    "wp-content/themes/twentytwentytwo/styles/",
+    "wp-content/themes/twentytwentytwo/templates/",
+    "wp-includes/",
+    "wp-includes/ID3/",
+    "wp-includes/IXR/",
+    "wp-includes/PHPMailer/",
+    "wp-includes/Requests/",
+    "wp-includes/Requests/library/",
+    "wp-includes/Requests/src/",
+    "wp-includes/Requests/src/Auth/",
+    "wp-includes/Requests/src/Cookie/",
+    "wp-includes/Requests/src/Exception/",
+    "wp-includes/Requests/src/Exception/Http/",
+    "wp-includes/Requests/src/Exception/Transport/",
+    "wp-includes/Requests/src/Proxy/",
+    "wp-includes/Requests/src/Response/",
+    "wp-includes/Requests/src/Transport/",
+    "wp-includes/Requests/src/Utility/",
+    "wp-includes/SimplePie/",
+    "wp-includes/SimplePie/library/",
+    "wp-includes/SimplePie/library/SimplePie/",
+    "wp-includes/SimplePie/library/SimplePie/Cache/",
+    "wp-includes/SimplePie/library/SimplePie/Content/",
+    "wp-includes/SimplePie/library/SimplePie/Content/Type/",
+    "wp-includes/SimplePie/library/SimplePie/Decode/",
+    "wp-includes/SimplePie/library/SimplePie/Decode/HTML/",
+    "wp-includes/SimplePie/library/SimplePie/HTTP/",
+    "wp-includes/SimplePie/library/SimplePie/Net/",
+    "wp-includes/SimplePie/library/SimplePie/Parse/",
+    "wp-includes/SimplePie/library/SimplePie/XML/",
+    "wp-includes/SimplePie/library/SimplePie/XML/Declaration/",
+    "wp-includes/SimplePie/src/",
+    "wp-includes/SimplePie/src/Cache/",
+    "wp-includes/SimplePie/src/Content/",
+    "wp-includes/SimplePie/src/Content/Type/",
+    "wp-includes/SimplePie/src/HTTP/",
+    "wp-includes/SimplePie/src/Net/",
+    "wp-includes/SimplePie/src/Parse/",
+    "wp-includes/SimplePie/src/XML/",
+    "wp-includes/SimplePie/src/XML/Declaration/",
+    "wp-includes/Text/",
+    "wp-includes/Text/Diff/",
+    "wp-includes/Text/Diff/Engine/",
+    "wp-includes/Text/Diff/Renderer/",
+    "wp-includes/abilities-api/",
+    "wp-includes/ai-client/",
+    "wp-includes/ai-client/adapters/",
+    "wp-includes/assets/",
+    "wp-includes/block-bindings/",
+    "wp-includes/block-patterns/",
+    "wp-includes/block-supports/",
+    "wp-includes/blocks/",
+    "wp-includes/blocks/accordion/",
+    "wp-includes/blocks/accordion-heading/",
+    "wp-includes/blocks/accordion-item/",
+    "wp-includes/blocks/accordion-panel/",
+    "wp-includes/blocks/archives/",
+    "wp-includes/blocks/audio/",
+    "wp-includes/blocks/avatar/",
+    "wp-includes/blocks/block/",
+    "wp-includes/blocks/breadcrumbs/",
+    "wp-includes/blocks/button/",
+    "wp-includes/blocks/buttons/",
+    "wp-includes/blocks/calendar/",
+    "wp-includes/blocks/categories/",
+    "wp-includes/blocks/code/",
+    "wp-includes/blocks/column/",
+    "wp-includes/blocks/columns/",
+    "wp-includes/blocks/comment-author-name/",
+    "wp-includes/blocks/comment-content/",
+    "wp-includes/blocks/comment-date/",
+    "wp-includes/blocks/comment-edit-link/",
+    "wp-includes/blocks/comment-reply-link/",
+    "wp-includes/blocks/comment-template/",
+    "wp-includes/blocks/comments/",
+    "wp-includes/blocks/comments-pagination/",
+    "wp-includes/blocks/comments-pagination-next/",
+    "wp-includes/blocks/comments-pagination-numbers/",
+    "wp-includes/blocks/comments-pagination-previous/",
+    "wp-includes/blocks/comments-title/",
+    "wp-includes/blocks/cover/",
+    "wp-includes/blocks/details/",
+    "wp-includes/blocks/embed/",
+    "wp-includes/blocks/file/",
+    "wp-includes/blocks/footnotes/",
+    "wp-includes/blocks/freeform/",
+    "wp-includes/blocks/gallery/",
+    "wp-includes/blocks/group/",
+    "wp-includes/blocks/heading/",
+    "wp-includes/blocks/home-link/",
+    "wp-includes/blocks/html/",
+    "wp-includes/blocks/icon/",
+    "wp-includes/blocks/image/",
+    "wp-includes/blocks/latest-comments/",
+    "wp-includes/blocks/latest-posts/",
+    "wp-includes/blocks/legacy-widget/",
+    "wp-includes/blocks/list/",
+    "wp-includes/blocks/list-item/",
+    "wp-includes/blocks/loginout/",
+    "wp-includes/blocks/math/",
+    "wp-includes/blocks/media-text/",
+    "wp-includes/blocks/missing/",
+    "wp-includes/blocks/more/",
+    "wp-includes/blocks/navigation/",
+    "wp-includes/blocks/navigation-link/",
+    "wp-includes/blocks/navigation-link/shared/",
+    "wp-includes/blocks/navigation-overlay-close/",
+    "wp-includes/blocks/navigation-submenu/",
+    "wp-includes/blocks/nextpage/",
+    "wp-includes/blocks/page-list/",
+    "wp-includes/blocks/page-list-item/",
+    "wp-includes/blocks/paragraph/",
+    "wp-includes/blocks/pattern/",
+    "wp-includes/blocks/post-author/",
+    "wp-includes/blocks/post-author-biography/",
+    "wp-includes/blocks/post-author-name/",
+    "wp-includes/blocks/post-comments-count/",
+    "wp-includes/blocks/post-comments-form/",
+    "wp-includes/blocks/post-comments-link/",
+    "wp-includes/blocks/post-content/",
+    "wp-includes/blocks/post-date/",
+    "wp-includes/blocks/post-excerpt/",
+    "wp-includes/blocks/post-featured-image/",
+    "wp-includes/blocks/post-navigation-link/",
+    "wp-includes/blocks/post-template/",
+    "wp-includes/blocks/post-terms/",
+    "wp-includes/blocks/post-time-to-read/",
+    "wp-includes/blocks/post-title/",
+    "wp-includes/blocks/preformatted/",
+    "wp-includes/blocks/pullquote/",
+    "wp-includes/blocks/query/",
+    "wp-includes/blocks/query-no-results/",
+    "wp-includes/blocks/query-pagination/",
+    "wp-includes/blocks/query-pagination-next/",
+    "wp-includes/blocks/query-pagination-numbers/",
+    "wp-includes/blocks/query-pagination-previous/",
+    "wp-includes/blocks/query-title/",
+    "wp-includes/blocks/query-total/",
+    "wp-includes/blocks/quote/",
+    "wp-includes/blocks/read-more/",
+    "wp-includes/blocks/rss/",
+    "wp-includes/blocks/search/",
+    "wp-includes/blocks/separator/",
+    "wp-includes/blocks/shortcode/",
+    "wp-includes/blocks/site-logo/",
+    "wp-includes/blocks/site-tagline/",
+    "wp-includes/blocks/site-title/",
+    "wp-includes/blocks/social-link/",
+    "wp-includes/blocks/social-links/",
+    "wp-includes/blocks/spacer/",
+    "wp-includes/blocks/table/",
+    "wp-includes/blocks/tag-cloud/",
+    "wp-includes/blocks/template-part/",
+    "wp-includes/blocks/term-count/",
+    "wp-includes/blocks/term-description/",
+    "wp-includes/blocks/term-name/",
+    "wp-includes/blocks/term-template/",
+    "wp-includes/blocks/terms-query/",
+    "wp-includes/blocks/text-columns/",
+    "wp-includes/blocks/verse/",
+    "wp-includes/blocks/video/",
+    "wp-includes/blocks/widget-group/",
+    "wp-includes/build/",
+    "wp-includes/build/pages/",
+    "wp-includes/build/pages/font-library/",
+    "wp-includes/build/pages/options-connectors/",
+    "wp-includes/build/routes/",
+    "wp-includes/build/routes/connectors-home/",
+    "wp-includes/build/routes/font-list/",
+    "wp-includes/build/routes/fonts-home/",
+    "wp-includes/certificates/",
+    "wp-includes/collaboration/",
+    "wp-includes/css/",
+    "wp-includes/css/dist/",
+    "wp-includes/css/dist/base-styles/",
+    "wp-includes/css/dist/block-directory/",
+    "wp-includes/css/dist/block-editor/",
+    "wp-includes/css/dist/block-library/",
+    "wp-includes/css/dist/commands/",
+    "wp-includes/css/dist/components/",
+    "wp-includes/css/dist/customize-widgets/",
+    "wp-includes/css/dist/edit-post/",
+    "wp-includes/css/dist/edit-site/",
+    "wp-includes/css/dist/edit-widgets/",
+    "wp-includes/css/dist/editor/",
+    "wp-includes/css/dist/format-library/",
+    "wp-includes/css/dist/list-reusable-blocks/",
+    "wp-includes/css/dist/media-utils/",
+    "wp-includes/css/dist/nux/",
+    "wp-includes/css/dist/patterns/",
+    "wp-includes/css/dist/preferences/",
+    "wp-includes/css/dist/reusable-blocks/",
+    "wp-includes/css/dist/widgets/",
+    "wp-includes/customize/",
+    "wp-includes/fonts/",
+    "wp-includes/html-api/",
+    "wp-includes/images/",
+    "wp-includes/images/crystal/",
+    "wp-includes/images/icon-library/",
+    "wp-includes/images/media/",
+    "wp-includes/images/smilies/",
+    "wp-includes/interactivity-api/",
+    "wp-includes/js/",
+    "wp-includes/js/codemirror/",
+    "wp-includes/js/crop/",
+    "wp-includes/js/dist/",
+    "wp-includes/js/dist/development/",
+    "wp-includes/js/dist/script-modules/",
+    "wp-includes/js/dist/script-modules/a11y/",
+    "wp-includes/js/dist/script-modules/abilities/",
+    "wp-includes/js/dist/script-modules/block-editor/",
+    "wp-includes/js/dist/script-modules/block-editor/utils/",
+    "wp-includes/js/dist/script-modules/block-library/",
+    "wp-includes/js/dist/script-modules/block-library/accordion/",
+    "wp-includes/js/dist/script-modules/block-library/file/",
+    "wp-includes/js/dist/script-modules/block-library/form/",
+    "wp-includes/js/dist/script-modules/block-library/image/",
+    "wp-includes/js/dist/script-modules/block-library/navigation/",
+    "wp-includes/js/dist/script-modules/block-library/playlist/",
+    "wp-includes/js/dist/script-modules/block-library/query/",
+    "wp-includes/js/dist/script-modules/block-library/search/",
+    "wp-includes/js/dist/script-modules/block-library/tabs/",
+    "wp-includes/js/dist/script-modules/boot/",
+    "wp-includes/js/dist/script-modules/connectors/",
+    "wp-includes/js/dist/script-modules/core-abilities/",
+    "wp-includes/js/dist/script-modules/edit-site-init/",
+    "wp-includes/js/dist/script-modules/interactivity/",
+    "wp-includes/js/dist/script-modules/interactivity-router/",
+    "wp-includes/js/dist/script-modules/latex-to-mathml/",
+    "wp-includes/js/dist/script-modules/lazy-editor/",
+    "wp-includes/js/dist/script-modules/route/",
+    "wp-includes/js/dist/script-modules/workflow/",
+    "wp-includes/js/dist/vendor/",
+    "wp-includes/js/imgareaselect/",
+    "wp-includes/js/jcrop/",
+    "wp-includes/js/jquery/",
+    "wp-includes/js/jquery/ui/",
+    "wp-includes/js/mediaelement/",
+    "wp-includes/js/mediaelement/renderers/",
+    "wp-includes/js/plupload/",
+    "wp-includes/js/swfupload/",
+    "wp-includes/js/thickbox/",
+    "wp-includes/js/tinymce/",
+    "wp-includes/js/tinymce/langs/",
+    "wp-includes/js/tinymce/plugins/",
+    "wp-includes/js/tinymce/plugins/charmap/",
+    "wp-includes/js/tinymce/plugins/colorpicker/",
+    "wp-includes/js/tinymce/plugins/compat3x/",
+    "wp-includes/js/tinymce/plugins/compat3x/css/",
+    "wp-includes/js/tinymce/plugins/directionality/",
+    "wp-includes/js/tinymce/plugins/fullscreen/",
+    "wp-includes/js/tinymce/plugins/hr/",
+    "wp-includes/js/tinymce/plugins/image/",
+    "wp-includes/js/tinymce/plugins/link/",
+    "wp-includes/js/tinymce/plugins/lists/",
+    "wp-includes/js/tinymce/plugins/media/",
+    "wp-includes/js/tinymce/plugins/paste/",
+    "wp-includes/js/tinymce/plugins/tabfocus/",
+    "wp-includes/js/tinymce/plugins/textcolor/",
+    "wp-includes/js/tinymce/plugins/wordpress/",
+    "wp-includes/js/tinymce/plugins/wpautoresize/",
+    "wp-includes/js/tinymce/plugins/wpdialogs/",
+    "wp-includes/js/tinymce/plugins/wpeditimage/",
+    "wp-includes/js/tinymce/plugins/wpemoji/",
+    "wp-includes/js/tinymce/plugins/wpgallery/",
+    "wp-includes/js/tinymce/plugins/wplink/",
+    "wp-includes/js/tinymce/plugins/wptextpattern/",
+    "wp-includes/js/tinymce/plugins/wpview/",
+    "wp-includes/js/tinymce/skins/",
+    "wp-includes/js/tinymce/skins/lightgray/",
+    "wp-includes/js/tinymce/skins/lightgray/fonts/",
+    "wp-includes/js/tinymce/skins/lightgray/img/",
+    "wp-includes/js/tinymce/skins/wordpress/",
+    "wp-includes/js/tinymce/skins/wordpress/images/",
+    "wp-includes/js/tinymce/themes/",
+    "wp-includes/js/tinymce/themes/inlite/",
+    "wp-includes/js/tinymce/themes/modern/",
+    "wp-includes/js/tinymce/utils/",
+    "wp-includes/l10n/",
+    "wp-includes/php-ai-client/",
+    "wp-includes/php-ai-client/src/",
+    "wp-includes/php-ai-client/src/Builders/",
+    "wp-includes/php-ai-client/src/Common/",
+    "wp-includes/php-ai-client/src/Common/Contracts/",
+    "wp-includes/php-ai-client/src/Common/Exception/",
+    "wp-includes/php-ai-client/src/Common/Traits/",
+    "wp-includes/php-ai-client/src/Events/",
+    "wp-includes/php-ai-client/src/Files/",
+    "wp-includes/php-ai-client/src/Files/DTO/",
+    "wp-includes/php-ai-client/src/Files/Enums/",
+    "wp-includes/php-ai-client/src/Files/ValueObjects/",
+    "wp-includes/php-ai-client/src/Messages/",
+    "wp-includes/php-ai-client/src/Messages/DTO/",
+    "wp-includes/php-ai-client/src/Messages/Enums/",
+    "wp-includes/php-ai-client/src/Operations/",
+    "wp-includes/php-ai-client/src/Operations/Contracts/",
+    "wp-includes/php-ai-client/src/Operations/DTO/",
+    "wp-includes/php-ai-client/src/Operations/Enums/",
+    "wp-includes/php-ai-client/src/Providers/",
+    "wp-includes/php-ai-client/src/Providers/ApiBasedImplementation/",
+    "wp-includes/php-ai-client/src/Providers/ApiBasedImplementation/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/DTO/",
+    "wp-includes/php-ai-client/src/Providers/Enums/",
+    "wp-includes/php-ai-client/src/Providers/Http/",
+    "wp-includes/php-ai-client/src/Providers/Http/Abstracts/",
+    "wp-includes/php-ai-client/src/Providers/Http/Collections/",
+    "wp-includes/php-ai-client/src/Providers/Http/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Http/DTO/",
+    "wp-includes/php-ai-client/src/Providers/Http/Enums/",
+    "wp-includes/php-ai-client/src/Providers/Http/Exception/",
+    "wp-includes/php-ai-client/src/Providers/Http/Traits/",
+    "wp-includes/php-ai-client/src/Providers/Http/Util/",
+    "wp-includes/php-ai-client/src/Providers/Models/",
+    "wp-includes/php-ai-client/src/Providers/Models/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Models/DTO/",
+    "wp-includes/php-ai-client/src/Providers/Models/Enums/",
+    "wp-includes/php-ai-client/src/Providers/Models/ImageGeneration/",
+    "wp-includes/php-ai-client/src/Providers/Models/ImageGeneration/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Models/SpeechGeneration/",
+    "wp-includes/php-ai-client/src/Providers/Models/SpeechGeneration/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Models/TextGeneration/",
+    "wp-includes/php-ai-client/src/Providers/Models/TextGeneration/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Models/TextToSpeechConversion/",
+    "wp-includes/php-ai-client/src/Providers/Models/TextToSpeechConversion/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/Models/VideoGeneration/",
+    "wp-includes/php-ai-client/src/Providers/Models/VideoGeneration/Contracts/",
+    "wp-includes/php-ai-client/src/Providers/OpenAiCompatibleImplementation/",
+    "wp-includes/php-ai-client/src/Results/",
+    "wp-includes/php-ai-client/src/Results/Contracts/",
+    "wp-includes/php-ai-client/src/Results/DTO/",
+    "wp-includes/php-ai-client/src/Results/Enums/",
+    "wp-includes/php-ai-client/src/Tools/",
+    "wp-includes/php-ai-client/src/Tools/DTO/",
+    "wp-includes/php-ai-client/third-party/",
+    "wp-includes/php-ai-client/third-party/Http/",
+    "wp-includes/php-ai-client/third-party/Http/Discovery/",
+    "wp-includes/php-ai-client/third-party/Http/Discovery/Exception/",
+    "wp-includes/php-ai-client/third-party/Http/Discovery/Strategy/",
+    "wp-includes/php-ai-client/third-party/Nyholm/",
+    "wp-includes/php-ai-client/third-party/Nyholm/Psr7/",
+    "wp-includes/php-ai-client/third-party/Nyholm/Psr7/Factory/",
+    "wp-includes/php-ai-client/third-party/Psr/",
+    "wp-includes/php-ai-client/third-party/Psr/EventDispatcher/",
+    "wp-includes/php-ai-client/third-party/Psr/Http/",
+    "wp-includes/php-ai-client/third-party/Psr/Http/Client/",
+    "wp-includes/php-ai-client/third-party/Psr/Http/Message/",
+    "wp-includes/php-ai-client/third-party/Psr/SimpleCache/",
+    "wp-includes/php-compat/",
+    "wp-includes/pomo/",
+    "wp-includes/rest-api/",
+    "wp-includes/rest-api/endpoints/",
+    "wp-includes/rest-api/fields/",
+    "wp-includes/rest-api/search/",
+    "wp-includes/sitemaps/",
+    "wp-includes/sitemaps/providers/",
+    "wp-includes/sodium_compat/",
+    "wp-includes/sodium_compat/lib/",
+    "wp-includes/sodium_compat/namespaced/",
+    "wp-includes/sodium_compat/namespaced/Core/",
+    "wp-includes/sodium_compat/namespaced/Core/ChaCha20/",
+    "wp-includes/sodium_compat/namespaced/Core/Curve25519/",
+    "wp-includes/sodium_compat/namespaced/Core/Curve25519/Ge/",
+    "wp-includes/sodium_compat/namespaced/Core/Poly1305/",
+    "wp-includes/sodium_compat/src/",
+    "wp-includes/sodium_compat/src/Core/",
+    "wp-includes/sodium_compat/src/Core/AEGIS/",
+    "wp-includes/sodium_compat/src/Core/AES/",
+    "wp-includes/sodium_compat/src/Core/Base64/",
+    "wp-includes/sodium_compat/src/Core/ChaCha20/",
+    "wp-includes/sodium_compat/src/Core/Curve25519/",
+    "wp-includes/sodium_compat/src/Core/Curve25519/Ge/",
+    "wp-includes/sodium_compat/src/Core/Poly1305/",
+    "wp-includes/sodium_compat/src/Core/SecretStream/",
+    "wp-includes/sodium_compat/src/Core32/",
+    "wp-includes/sodium_compat/src/Core32/ChaCha20/",
+    "wp-includes/sodium_compat/src/Core32/Curve25519/",
+    "wp-includes/sodium_compat/src/Core32/Curve25519/Ge/",
+    "wp-includes/sodium_compat/src/Core32/Poly1305/",
+    "wp-includes/sodium_compat/src/Core32/SecretStream/",
+    "wp-includes/sodium_compat/src/PHP52/",
+    "wp-includes/style-engine/",
+    "wp-includes/theme-compat/",
+    "wp-includes/widgets/",
+]
+
+HEADERS = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+TIMEOUT = 10
+MAX_WORKERS_CHECK = 20   # buat pengecekan folder paralel
+MAX_WORKERS_RECURSIVE = 5 # buat recursive scan per top-level folder (optional)
+
+# ==================================================================
+# FUNGSI DETEKSI CEPAT APAKAH SITUS WORDPRESS
+# ==================================================================
+def is_wordpress_site(base_url):
+    """Cek apakah situs menggunakan WordPress (cepat dengan HEAD/GET beberapa file penting)."""
+    test_paths = [
+        "wp-login.php",
+        "wp-content/",
+        "wp-includes/",
+        "wp-admin/"
+    ]
+    for path in test_paths:
+        url = urljoin(base_url, path)
+        try:
+            resp = requests.head(url, headers=HEADERS, timeout=5, allow_redirects=False)
+            if resp.status_code == 200:
+                return True
+            # Jika HEAD tidak support, coba GET dengan stream
+            resp = requests.get(url, headers=HEADERS, timeout=5, stream=True)
+            if resp.status_code == 200:
+                return True
+        except:
+            continue
+    return False
+
+# ==================================================================
+# FUNGSI SCANNING INDEX OF (PARALEL)
+# ==================================================================
+def is_index_of(url):
+    """Cek apakah suatu URL adalah halaman Index Of (return True/False)."""
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT, allow_redirects=False)
+        if resp.status_code != 200:
+            return False
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        title = soup.find('title')
+        return title and "Index of" in title.text
+    except:
+        return False
+
+def get_all_open_folders_parallel(base_url, folder_list):
+    """Cek banyak folder secara paralel, return list URL yang index of."""
+    full_urls = [urljoin(base_url, folder) for folder in folder_list]
+    open_folders = []
+    with ThreadPoolExecutor(max_workers=MAX_WORKERS_CHECK) as executor:
+        future_to_url = {executor.submit(is_index_of, url): url for url in full_urls}
+        for future in as_completed(future_to_url):
+            url = future_to_url[future]
+            if future.result():
+                print(f"  ✅ TERBUKA: {url}")
+                open_folders.append(url)
+    return open_folders
+
+# ==================================================================
+# SCANNING REKURSIF (dengan caching visited)
+# ==================================================================
+def get_directory_links(url):
+    """Ambil daftar subdirektori dari satu halaman Index Of."""
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=TIMEOUT)
+        if resp.status_code != 200:
+            return []
+        soup = BeautifulSoup(resp.text, 'html.parser')
+        title = soup.find('title')
+        if not (title and "Index of" in title.text):
+            return []
+        links = []
+        for row in soup.find_all('tr'):
+            link_tag = row.find('a')
+            if link_tag and link_tag.get('href'):
+                href = link_tag['href']
+                if href.endswith('/') and href not in ('../', '/'):
+                    links.append(urljoin(url, href))
+        return links
+    except:
+        return []
+
+def recursive_scan(folder_url, max_depth=3, visited=None, current_depth=0):
+    if visited is None:
+        visited = set()
+    if current_depth >= max_depth or folder_url in visited:
+        return []
+    visited.add(folder_url)
+    print(f"{'  ' * current_depth}📂 Scanning: {folder_url}")
+    subdirs = get_directory_links(folder_url)
+    all_sub = []
+    for sub in subdirs:
+        all_sub.append(sub)
+        all_sub.extend(recursive_scan(sub, max_depth, visited, current_depth+1))
+    return all_sub
+
+# ==================================================================
+# DETEKSI BACKDOOR (tetap pakai threading untuk file .php)
+# ==================================================================
+def is_suspicious_backdoor(html, status_code):
+    if not html:
+        return False, {}
+    soup = BeautifulSoup(html, 'html.parser')
+    forms = soup.find_all('form', method=lambda x: x and x.lower() == 'post')
+    if not forms:
+        return False, {}
+    has_pwd = any(form.find_all('input', {'type': 'password'}) for form in forms)
+    if not has_pwd:
+        return False, {}
+    title = soup.find('title')
+    title_text = title.get_text(strip=True).lower() if title else ""
+    keywords_title = ['pheditor', 'file manager', 'webshell', 'backdoor', 'wso', 'c99', 'b374k', 'shell']
+    keywords_body = ['过安全狗', '云锁', 'd盾', 'Pheditor', 'c99shell', '微型后门', '一句话']
+    fake_error = status_code == 200 and ('internal server error' in title_text or 'forbidden' in title_text)
+    if any(k in title_text for k in keywords_title) or any(k in html.lower() for k in keywords_body) or fake_error:
+        return True, {'title': title_text, 'fake_error': fake_error}
+    return False, {}
+
+def check_php_file(url):
+    try:
+        resp = requests.get(url, headers=HEADERS, timeout=10, allow_redirects=False)
+        if resp.status_code in (200, 403, 404, 500):
+            is_bd, reason = is_suspicious_backdoor(resp.text, resp.status_code)
+            if is_bd:
+                return url, True, reason
+    except:
+        pass
+    return url, False, {}
+
+def get_php_files_from_dir(dir_url):
+    php_files = set()
+    try:
+        resp = requests.get(dir_url, headers=HEADERS, timeout=10)
+        if resp.status_code == 200:
+            soup = BeautifulSoup(resp.text, 'html.parser')
+            for link in soup.find_all('a'):
+                href = link.get('href')
+                if href and href.endswith('.php'):
+                    full = urljoin(dir_url, href)
+                    php_files.add(full)
+    except:
+        pass
+    php_files.add(urljoin(dir_url, 'index.php'))
+    return php_files
+
+def scan_backdoors_parallel(folder_urls, output_file):
+    print(f"\n🔍 Mengumpulkan file .php dari {len(folder_urls)} direktori...")
+    all_php = set()
+    for folder in folder_urls:
+        all_php.update(get_php_files_from_dir(folder))
+    print(f"📄 Total file .php unik: {len(all_php)}")
+    print("🚀 Deteksi backdoor (parallel)...")
+    suspicious = []
+    with ThreadPoolExecutor(max_workers=10) as ex:
+        futures = [ex.submit(check_php_file, url) for url in all_php]
+        for fut in as_completed(futures):
+            url, is_bd, reason = fut.result()
+            if is_bd:
+                suspicious.append((url, reason))
+                print(f"[!] 🚨 BACKDOOR: {url}")
+    with open(output_file, 'w', encoding='utf-8') as f:
+        f.write("REPORT BACKDOOR\n")
+        for url, reason in suspicious:
+            f.write(f"{url}\n    {reason}\n")
+    print(f"✅ Ditemukan {len(suspicious)} backdoor. Laporan: {output_file}")
+
+# ==================================================================
+# PROSES SATU SITUS
+# ==================================================================
+def process_site(base_url):
+    print(f"\n{'='*60}\n🌐 Memproses: {base_url}\n{'='*60}")
+    start_time = time.time()
+    
+    # 1. Deteksi WordPress cepat
+    if not is_wordpress_site(base_url):
+        print("❌ BUKAN WORDPRESS atau tidak dapat diakses. Skip.")
+        return
+    
+    print("✅ Terdeteksi sebagai WordPress. Melanjutkan scan folder...")
+    
+    # 2. Scan semua folder di ALL_WP_FOLDERS secara paralel
+    open_folders = get_all_open_folders_parallel(base_url, ALL_WP_FOLDERS)
+    
+    if not open_folders:
+        print("⚠️ Tidak ada folder Index Of. Coba fallback ke file index.php...")
+        fallback = [urljoin(base_url, p) for p in [
+            "wp-admin/index.php", "wp-content/index.php", "wp-includes/index.php",
+            "wp-content/plugins/index.php", "wp-includes/js/index.php"
+        ]]
+        scan_backdoors_parallel(fallback, f"backdoor_{base_url.replace('https://','').replace('/','_')}.txt")
+        return
+    
+    # 3. Filter top-level (parent tidak terbuka)
+    open_set = set(open_folders)
+    top_level = []
+    for folder in sorted(open_folders, key=len):
+        parent = folder.rstrip('/')
+        last = parent.rfind('/')
+        if last != -1:
+            parent = parent[:last+1]
+            if parent in open_set:
+                continue
+        top_level.append(folder)
+    
+    print(f"\n🎯 Folder top-level ({len(top_level)}) akan discan rekursif:")
+    for f in top_level:
+        print(f"   {f}")
+    
+    # 4. Scan rekursif (bisa sequential karena sudah terfilter, cepat)
+    all_dirs = []
+    for folder in top_level:
+        print(f"\n📁 Rekursif: {folder}")
+        subdirs = recursive_scan(folder, max_depth=3)
+        all_dirs.append(folder)
+        all_dirs.extend(subdirs)
+    
+    all_dirs = list(dict.fromkeys(all_dirs))
+    print(f"\n✨ Total direktori unik: {len(all_dirs)}")
+    
+    # 5. Scan backdoor di semua direktori
+    output_file = f"backdoor_{base_url.replace('https://','').replace('http://','').replace('/','_')}.txt"
+    scan_backdoors_parallel(all_dirs, output_file)
+    
+    elapsed = time.time() - start_time
+    print(f"⏱️  Waktu total untuk {base_url}: {elapsed:.2f} detik")
+
+# ==================================================================
+# MAIN: BATCH DARI FILE ATAU SINGLE URL
+# ==================================================================
+def main():
+    if len(sys.argv) < 2:
+        print("Usage: python main.py <url_or_file.txt>")
+        print("Contoh: python main.py https://example.com")
+        print("        python main.py daftar_situs.txt")
+        sys.exit(1)
+    
+    arg = sys.argv[1]
+    if arg.endswith('.txt'):
+        with open(arg, 'r') as f:
+            urls = [line.strip() for line in f if line.strip()]
+        for url in urls:
+            if not url.startswith(('http://','https://')):
+                url = 'https://' + url
+            process_site(url)
+    else:
+        if not arg.startswith(('http://','https://')):
+            arg = 'https://' + arg
+        process_site(arg)
+
+if __name__ == "__main__":
+    main()
